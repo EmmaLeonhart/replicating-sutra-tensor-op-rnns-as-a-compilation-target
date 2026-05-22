@@ -1,0 +1,17 @@
+
+vector v_cat = basis_vector("cat");
+vector v_dog = basis_vector("dog");
+vector v_bird = basis_vector("bird");
+
+function vector bundle_all() {
+    vector acc = basis_vector("zero");
+    foreach (vector x in [v_cat, v_dog, v_bird]) {
+        acc = bundle(acc, x);
+    }
+    return acc;
+}
+
+function string main() {
+    vector result = bundle_all();
+    return "ok";
+}

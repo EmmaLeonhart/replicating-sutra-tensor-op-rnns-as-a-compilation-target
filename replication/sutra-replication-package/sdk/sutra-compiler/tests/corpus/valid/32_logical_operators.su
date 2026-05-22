@@ -1,0 +1,67 @@
+// Sutra corpus test: logical operators on truth-axis values.
+//
+// `&&`, `||`, `!` operate on the truth axis. Smooth polynomial
+// forms of min / max / negate — Lagrange-derived to match the
+// three-valued truth table exactly on {-1, 0, +1}² while staying
+// C^∞ everywhere off the grid:
+//
+//   !x     = -x
+//   a && b = (a + b + ab - a² - b² + a²b²) / 2        (smooth min)
+//   a || b = (a + b - ab + a² + b² - a²b²) / 2        (smooth max)
+//
+// All pure element-wise vector arithmetic — no absolute value, no
+// kinks, no subgradient dispatch. Compile-time simplification
+// passes can apply polynomial rewrites uniformly.
+//
+// `true` / `false` / `unknown` are truth-axis vectors (make_truth
+// of +1, -1, 0). Three-valued result table is exact on the grid;
+// continuous fuzzy values get a polynomial interpolation between
+// those grid points.
+//
+// Unlike C# / JavaScript / TypeScript `&&` and `||`, these do NOT
+// short-circuit. Both sides are always evaluated.
+
+function bool BoolAnd() {
+    return true && false;
+}
+
+function bool BoolOr() {
+    return true || false;
+}
+
+function bool BoolNot() {
+    return !true;
+}
+
+function fuzzy FuzzyAnd() {
+    fuzzy a = 0.7;
+    fuzzy b = 0.3;
+    return a && b;
+}
+
+function fuzzy FuzzyOr() {
+    fuzzy a = 0.7;
+    fuzzy b = 0.3;
+    return a || b;
+}
+
+function fuzzy FuzzyNot() {
+    fuzzy a = 0.5;
+    return !a;
+}
+
+// Trit cases — the neutral point is preserved under AND/OR.
+function trit TritAndWithNeutral() {
+    trit a = true;
+    return a && unknown;
+}
+
+function trit TritOrWithNeutral() {
+    trit a = false;
+    return a || unknown;
+}
+
+function trit TritNotNeutral() {
+    trit a = unknown;
+    return !a;
+}

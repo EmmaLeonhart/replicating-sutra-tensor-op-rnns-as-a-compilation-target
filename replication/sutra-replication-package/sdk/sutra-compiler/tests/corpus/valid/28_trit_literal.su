@@ -1,0 +1,42 @@
+// Sutra corpus test: three-valued primitive class `trit`.
+//
+// Shares truth-axis storage with `fuzzy` — the distinction is at
+// compile time and in the defuzzification rule: `defuzzify_trit`
+// polarizes toward {-1, 0, +1} instead of {-1, +1}, so the neutral
+// point is a first-class attractor rather than a midpoint to
+// collapse across.
+//
+// These aren't really primitives — they're primitive CLASSES,
+// vector subclasses with specific axis conventions. The runtime
+// representation is identical to `fuzzy`; the behavior differs
+// only at defuzzification time.
+
+function trit TritPositive() {
+    trit t = 0.7;
+    return t;
+}
+
+function trit TritNeutral() {
+    trit t = 0;
+    return t;
+}
+
+function trit TritNegative() {
+    trit t = -0.5;
+    return t;
+}
+
+function trit TritSmallBias() {
+    trit t = 0.3;
+    return t;
+}
+
+function trit TritFromBool() {
+    trit t = true;
+    return t;
+}
+
+function trit TritFromFalse() {
+    trit t = false;
+    return t;
+}

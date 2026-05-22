@@ -1,0 +1,88 @@
+// =============================================================================
+// Modulus — EXPENSIVE. The floor-mod family, derived from the SAME
+// eigenrotation that powers sin/cos in math.su.
+// =============================================================================
+//
+// Read math.su first: cos/sin are the real/imag parts of the unit
+// eigenrotation by an angle. Modulus is that same rotation, but around a
+// circle whose CIRCUMFERENCE is the modulus m instead of 2π.
+//
+// ── Why modulus is an eigenrotation ─────────────────────────────────────────
+//
+// Walking distance x around a circle of circumference m and asking "where
+// did I end up" IS `x mod m`. Map the walk to an angle, rotate, read the
+// phase back, scale the phase by m/2π:
+//
+//   θ      = 2π · x / m              (x scaled so one lap = m)
+//   (c, s) = cos θ, sin θ            (the eigenrotation — math.su leaves)
+//   φ      = atan2(s, c)             (phase of the rotated vector)
+//   φ_pos  = φ - 2π·floor(φ / 2π)    (re-wrap onto [0, 2π))
+//   result = m · φ_pos / (2π)        (un-scale: angle back to distance)
+//
+// The rotation is intrinsically periodic — `R(θ + 2π) = R(θ)` exactly — so
+// the modulus "comes for free" from the rotation; there is no separate
+// range-reduction step. This is `_VSA.rotation_mod`, all tensor ops, and
+// the language's canonical `mod`. (`atan2` is still a tensor op; replacing
+// it with its own eigenrotation lookup is the one tracked follow-on in the
+// substrate-leak audit.)
+//
+// floor / ceil / round / trunc / abs / sign are NOT transcendental
+// decompositions — they are native substrate (GPU) rounding instructions,
+// one tensor op each, so they sit at the primitive layer beside +, -, *.
+//
+// Most leaves are `intrinsic` (route to substrate-pure `_VSA.*`). `mod` is
+// the canonical literate alias: its body `{ return rotation_mod(x, m); }`
+// IS the source-level beta reduction — the inliner expands Math.mod(x, m)
+// to rotation_mod(x, m) (verified end-to-end Math.mod(-0.1, 1) = 0.9).
+// rotation_mod/sawtooth_mod/fmod stay intrinsic because each is a single
+// chain of substrate ops at the leaf, not a substitution onto siblings.
+//
+// These extend `class Math` so JS-shaped call sites (`Math.floor(x)`,
+// `Math.abs(x)`) merge into one namespace via the stdlib loader. `%`
+// lowers to `Math.fmod` (truncation modulus, sign of the dividend);
+// `Math.mod` is the eigenrotation floor-mod (non-negative for m > 0).
+
+class Math extends vector {
+
+    // ── Native substrate rounding instructions ───────────────────────────────
+    //
+    // Each is a single tensor op in _VSA (torch.floor / ceil / round /
+    // trunc / abs / sign), tensor-in → tensor-out, no host scalar.
+    static intrinsic method number floor(number x);
+    static intrinsic method number ceil(number x);
+    static intrinsic method number round(number x);
+    static intrinsic method number trunc(number x);
+    static intrinsic method number abs(number x);
+    static intrinsic method number sign(number x);
+
+    // ── The eigenrotation modulus ────────────────────────────────────────────
+    //
+    // rotation_mod — the chain documented in the header. Substrate-pure:
+    //   cos/sin eigenrotation + atan2 + re-wrap, all tensor ops. Always
+    //   non-negative for m > 0 (`Math.rotation_mod(-0.1, 1) == 0.9`);
+    //   discontinuous at integer multiples of m (atan2 branch cut).
+    //   Divisor 0 → NaN tensor, the degenerate limit, not a host raise.
+    static intrinsic method number rotation_mod(number x, number m);
+
+    // sawtooth_mod — the smooth Fourier-series alternative:
+    //   mod_floor(x,m) ≈ m/2 − (m/π)·Σ_{k=1..N} sin(2πkx/m)/k. The k-sum
+    //   is a single vectorized tensor reduction (a (K,N) crosstalk-weight
+    //   matmul against the sin table), NOT a Python loop. Fully
+    //   differentiable; ~9% Gibbs ring near integer multiples of m.
+    static intrinsic method number sawtooth_mod(number x, number m);
+
+    // fmod — truncation modulus (JS / C / C# / Rust / TS `%`): result has
+    //   the sign of the dividend. x − m·trunc(x/m), all tensor ops.
+    //   Divisor 0 → NaN tensor (no host ZeroDivisionError). `%` lowers
+    //   here.
+    static intrinsic method number fmod(number x, number m);
+
+    // mod — the canonical mathematical floor-modulus. The body IS the
+    //   substitution: `mod = rotation_mod`. The inliner expands
+    //   Math.mod(x, m) → rotation_mod(x, m), which routes to the
+    //   substrate-pure eigenrotation leaf. Non-negative for m > 0
+    //   (`Math.mod(-0.1, 1) == 0.9`). This is what mathematical code
+    //   should reach for; `%` (fmod) keeps the dividend's sign for JS
+    //   parity.
+    static method number mod(number x, number m) { return rotation_mod(x, m); }
+}

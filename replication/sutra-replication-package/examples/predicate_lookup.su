@@ -1,0 +1,78 @@
+// Predicate lookup with multi-object superposition.
+//
+// Specialization of the knowledge-graph demo to the case where the
+// same (subject, predicate) key appears with multiple objects. Under
+// VSA superposition, the unbound result is a *sum* of all matching
+// objects, so each member object has non-trivial cosine similarity
+// to the recovered vector while non-members have near-zero cosine.
+//
+// Graph:
+//   alice likes cats
+//   alice likes dogs        <- alice likes two things
+//   bob   likes fish
+//   bob   likes birds       <- bob likes two things
+//   carol likes hamsters
+//
+// Query (alice, likes) should recover a superposition of cats + dogs;
+// similarity to cats and dogs is HIGH, similarity to fish/birds/
+// hamsters is LOW.
+//
+// The demo returns the similarity score between the recovered vector
+// and a candidate object — the smoke test checks the ordering
+// (members rank above non-members).
+
+// --- Subjects ---
+vector alice = basis_vector("alice");
+vector bob   = basis_vector("bob");
+vector carol = basis_vector("carol");
+
+// --- Predicate ---
+vector likes = basis_vector("likes");
+
+// --- Objects ---
+vector cats     = basis_vector("cats");
+vector dogs     = basis_vector("dogs");
+vector fish     = basis_vector("fish");
+vector birds    = basis_vector("birds");
+vector hamsters = basis_vector("hamsters");
+
+// --- Graph: five triples, bundled. Two (subject, predicate) keys
+// have multiple objects. ---
+// Role-first nested bind: bind(subject, bind(predicate, object)).
+// Under rotation binding, this composes Q_subject @ Q_predicate @ object;
+// retrieval with unbind(predicate, unbind(subject, graph)) applies
+// the inverses in reverse order to recover object.
+vector graph = bundle(
+    bind(alice, bind(likes, cats)),
+    bind(alice, bind(likes, dogs)),
+    bind(bob,   bind(likes, fish)),
+    bind(bob,   bind(likes, birds)),
+    bind(carol, bind(likes, hamsters))
+);
+
+// Score how well (subject, predicate) implies object — cosine
+// similarity of the recovered bundle to the candidate object.
+function scalar fits(vector subject, vector predicate, vector object) {
+    vector recovered = unbind(predicate, unbind(subject, graph));
+    return similarity(recovered, object);
+}
+
+// Labels for argmax reporting — the multi-object bundle's top match
+// is one of the two true members (cats or dogs for alice).
+map<vector, string> OBJECT_NAME = {
+    cats:     "cats",
+    dogs:     "dogs",
+    fish:     "fish",
+    birds:    "birds",
+    hamsters: "hamsters"
+};
+
+function string top_object(vector subject, vector predicate) {
+    vector recovered = unbind(predicate, unbind(subject, graph));
+    vector winner = argmax_cosine(recovered, [cats, dogs, fish, birds, hamsters]);
+    return OBJECT_NAME[winner];
+}
+
+function string main() {
+    return top_object(alice, likes);
+}

@@ -1,0 +1,25 @@
+
+function fuzzy Seven() {
+    fuzzy f = 0.7;
+    return f;
+}
+
+function fuzzy NegThree() {
+    fuzzy f = -0.3;
+    return f;
+}
+
+function fuzzy BoolTrue() {
+    fuzzy f = true;
+    return f;
+}
+
+function fuzzy BoolFalse() {
+    fuzzy f = false;
+    return f;
+}
+
+function fuzzy Unknown() {
+    fuzzy f = 0;
+    return f;
+}

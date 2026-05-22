@@ -1,0 +1,10 @@
+
+do_while addNumber(x < 11, int x) {
+    pass x + 1;
+}
+
+function int main() {
+    slot int x = 9;
+    loop addNumber(x < 11, x);
+    return x;
+}

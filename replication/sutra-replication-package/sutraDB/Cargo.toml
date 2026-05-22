@@ -1,0 +1,67 @@
+# Workspace Cargo.toml — trimmed for the supplementary archive.
+# The full upstream workspace lists sutra-core, sutra-hnsw,
+# sutra-sparql, sutra-proto, sutra-cli, sutra-ffi as members. The
+# archive ships only the four crates `cargo build -p sutra-ffi`
+# needs.
+
+[workspace]
+members = [
+    "sutra-core",
+    "sutra-hnsw",
+    "sutra-sparql",
+    "sutra-ffi",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.3.7"
+edition = "2021"
+license = "Apache-2.0"
+authors = []
+description = "A lean RDF-star triplestore with native HNSW vector indexing and hybrid SPARQL"
+
+[workspace.dependencies]
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Storage
+memmap2 = "0.9"
+sled = "0.34"
+
+# Hashing
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+# Parallelism
+rayon = "1"
+
+# URL encoding
+urlencoding = "2"
+
+# Benchmarking (used by [dev-dependencies] in member crates)
+criterion = { version = "0.5", features = ["html_reports"] }
+
+# Intra-workspace
+sutra-core   = { path = "sutra-core" }
+sutra-hnsw   = { path = "sutra-hnsw" }
+sutra-sparql = { path = "sutra-sparql" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"
+debug = true

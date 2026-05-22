@@ -1,0 +1,57 @@
+// Sutra corpus test: ordered comparison — differentiable, number-axis.
+//
+// `>`, `<`, `>=`, `<=` on number-family operands work by projecting
+// both sides to the real axis (matmul), subtracting, and applying
+// tanh with a steep slope to get a smooth sign. Pure tensor
+// arithmetic — no componentwise predicate, no Python branch,
+// differentiable everywhere.
+//
+// Saturates at ±1 for any appreciable difference (tanh(100 · 1) is
+// indistinguishable from +1 at double precision). Smooth in the
+// near-tie region. Exact tie returns tanh(0) = 0 (unknown).
+//
+// Strict (`>`, `<`) and non-strict (`>=`, `<=`) collapse under this
+// scheme — both give tanh(0) = 0 on ties. Programs that need to
+// distinguish tie from strict inequality compose with `==`.
+//
+// Comparing truth-family values (bool / fuzzy / trit) is a compile-
+// time error — ordered comparison has no natural meaning on the
+// truth axis.
+
+function fuzzy IntGt() {
+    int a = 5;
+    int b = 3;
+    return a > b;                 // ≈ +1 (tanh(100·2) saturated)
+}
+
+function fuzzy IntLt() {
+    int a = 3;
+    int b = 5;
+    return a > b;                 // ≈ -1
+}
+
+function fuzzy IntTie() {
+    int a = 7;
+    int b = 7;
+    return a > b;                 // 0 (tanh(0))
+}
+
+function fuzzy FloatCmp() {
+    float a = 3.14;
+    float b = 2.71;
+    return a > b;                 // ≈ +1 (diff = 0.43, tanh(43) saturated)
+}
+
+function fuzzy LessThan() {
+    int a = 3;
+    int b = 5;
+    return a < b;                 // ≈ +1
+}
+
+// Non-strict behavior: same as strict on the differentiable scheme.
+// (Composing with == gives you the "true on tie" semantic if you need it.)
+function fuzzy GeTie() {
+    int a = 7;
+    int b = 7;
+    return a >= b;                // 0 (same as `>` at tie)
+}

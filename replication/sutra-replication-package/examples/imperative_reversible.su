@@ -1,0 +1,18 @@
+
+function int single_write() {
+    slot int x = 0;
+    x = 7;
+    return x;
+}
+
+function int rewrite_chain() {
+    slot int x = 0;
+    x = 99;
+    x = 13;
+    x = 7;
+    return x;
+}
+
+function int main() {
+    return rewrite_chain() - single_write();
+}

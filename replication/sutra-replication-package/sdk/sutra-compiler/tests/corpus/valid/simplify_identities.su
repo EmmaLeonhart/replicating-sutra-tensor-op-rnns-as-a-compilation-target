@@ -1,0 +1,19 @@
+
+vector v_a = basis_vector("a");
+vector v_b = basis_vector("b");
+vector v_c = basis_vector("c");
+vector v_d = basis_vector("d");
+
+function vector bundle_of_one() {
+    // Simplifies to `return v_a;`
+    return bundle(v_a);
+}
+
+function vector nested_bundle() {
+    // Simplifies to `return bundle(v_a, v_b, v_c, v_d);`
+    return bundle(bundle(v_a, v_b), v_c, bundle(v_d));
+}
+
+function vector main() {
+    return bundle_of_one();
+}
