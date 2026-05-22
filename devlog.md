@@ -56,3 +56,18 @@ grew); loops 23/23; codebook 7/7 (after building the Rust FFI); torch.compile
 all four substrates** (nomic/all-minilm/mxbai LLMs + ESM-2 protein LM); §3.1.1
 crosstalk reproduces the decay (chain=1 100% → chain=8 chance). References
 checked — all real, load-bearing ones say what the paper claims.
+
+## 2026-05-22 — Headline neuro-symbolic claim reproduced (§3.6/§3.7)
+
+Both differentiable-training legs reproduce through the actually-compiled
+PyTorch graph, exact to the paper's reported precision:
+- **§3.6** (K=5, 50 words, 3 seeds, batched): before **18.67 ± 9.45%**
+  (chance 20%) → after **100.00 ± 0.00%**; `grads_through_emitted_graph=True`
+  on every seed; self-timed 235.4 s (paper ≈230 s). Paper: 18.7±9.5 → 100.0±0.0.
+- **§3.7** (K=3, 24 words, 2 seeds): before **33.33 ± 5.89%** → after
+  **100.00 ± 0.00%**; learned gain **w\* = 1.4339 ± 0.0035**; baked `.su`
+  recompiles to logits within **1.5–2.1×10⁻⁷** (`round_trip_ok(all)=True`).
+  Paper: 33.3±5.9 → 100.0±0.0; w\*=1.434±0.004; ≈2×10⁻⁷.
+
+The paper's central thesis — one `.su` artifact is both a logic program and a
+trainable neural network — holds. FINDINGS.md updated and published.
