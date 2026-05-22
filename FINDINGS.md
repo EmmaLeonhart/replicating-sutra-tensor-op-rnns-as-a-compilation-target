@@ -27,9 +27,17 @@ tensor-op graph*. It has two legs:
    bundles at **100% through width k=8 on all four frozen substrates**, where
    textbook Hadamard binding has already collapsed. Every cell of the paper's
    capacity table reproduced **exactly** (table below).
-2. **Differentiable training through the compiled graph (§3.6/§3.7) — being
-   verified.** Run in progress at the time of writing; numbers filled in below
-   once it completes.
+2. **Differentiable training through the compiled graph (§3.6/§3.7) —
+   reproduced.** A fuzzy-rule classifier written in `.su` trains from random
+   init (**18.67 ± 9.45%**, chance 20%) to **100.00 ± 0.00%** (3 seeds) by
+   backpropagating through the *emitted* graph, the symbolic source unchanged;
+   gradients flow through the compiled ops on every seed. A weighted variant
+   trains a scalar gain (**w\* = 1.4339 ± 0.0035**) and bakes it back into the
+   `.su` as a literal that recompiles to logits within ≈2×10⁻⁷ — the trained
+   model is itself legible, recompilable code (table below).
+
+Both legs reproduce, so the paper's core thesis — *the same artifact is both a
+logic program and a trainable neural network* — holds on this machine.
 
 ---
 
@@ -66,9 +74,22 @@ claim, on text and on a protein LM with no natural-language exposure.
 
 ## §3.1.1 — Chained bind/unbind crosstalk
 
-Reproduced with `experiments/crosstalk_chain.py`. 20 trials, bundle width 4.
+Reproduced with `experiments/crosstalk_chain.py`. 20 trials, bundle width 4,
+chain lengths {1,2,4,8,16,32}. Decode = raw (no per-cycle cleanup).
 
-_[crosstalk table filled below once the run completes]_
+nomic-embed-text (768), raw accuracy:
+
+| chain length | reported | reproduced | match |
+|--------------|----------|------------|-------|
+| 1 | 100% | 100.0% | ✓ |
+| 2 | 100% | 100.0% | ✓ |
+| 4 | (decaying) | 20.0% | ✓ |
+| 8 | chance (1/84 ≈ 1.2%) | 0.0% | ✓ |
+
+Matches the paper's claim: raw accuracy holds at 100% through L=2 and falls to
+chance by L=8 — scoping the §3.1 capacity result to single-cycle records. (A
+clean full-sweep run across all three substrates was launched to confirm the
+same pattern holds on every substrate; nomic is shown here.)
 
 ## §3.4 — First-class loops as soft-halt RNN cells
 
@@ -85,7 +106,43 @@ _[crosstalk table filled below once the run completes]_
 
 ## §3.6 / §3.7 — Differentiable training through the compiled graph
 
-_[filled below once the training runs complete]_
+**§3.6 — compiled fuzzy-rule classifier** (`differentiable_training_compiled.py
+--k 5 --per-class 10 --epochs 30 --seeds 0,1,2 --lr 0.01 --batched`). Five
+learnable prototype tensors trained from random init by backpropagating through
+the **emitted** rule `AND(sim(x,p_i), AND_{j≠i} NOT(sim(x,p_j)))` — the
+compiler's `_VSA.similarity` composed with the Lagrange–Kleene AND/NOT
+polynomials. The `.su` source is unchanged across training.
+
+| metric | reported | reproduced | match |
+|--------|----------|------------|-------|
+| accuracy before (chance 20%) | 18.7 ± 9.5% | **18.67 ± 9.45%** | ✓ |
+| accuracy after (30 ep, 3 seeds) | 100.0 ± 0.0% | **100.00 ± 0.00%** | ✓ |
+| gradients flow through emitted graph | yes (all seeds) | `grads_through_emitted_graph=True` (all 3 seeds) | ✓ |
+| batched wall-clock (CPU) | ≈230 s | 235.4 s (self-timed) | ✓ |
+
+Per-seed before→after: 0.220→1.000, 0.260→1.000, 0.080→1.000. The emitted
+`rule()` body is visibly the compiled tensor expression over `_VSA.similarity`
+(not a host-float reimplementation; the harness's Stage-A0 assertion enforces
+this).
+
+**§3.7 — trained scalar gain baked back into `.su`**
+(`differentiable_training_weighted.py --k 3 --per-class 8 --epochs 30
+--seeds 0,1`, lr 0.02). A scalar gain `w` and the prototypes are trained
+together through the emitted graph; `w*` is then substituted into a fresh `.su`
+as a numeric **literal** (the parameter removed), recompiled, and the recompiled
+logits are checked against the parametric model.
+
+| metric | reported | reproduced | match |
+|--------|----------|------------|-------|
+| accuracy before (chance 33.3%) | 33.3 ± 5.9% | **33.33 ± 5.89%** | ✓ |
+| accuracy after (30 ep, 2 seeds) | 100.0 ± 0.0% | **100.00 ± 0.00%** | ✓ |
+| learned gain w* | 1.434 ± 0.004 | **1.4339 ± 0.0035** | ✓ |
+| baked-`.su` recompile round-trip | logits within ≈2×10⁻⁷ | `round_trip_ok(all)=True`, max logit Δ = 1.5–2.1×10⁻⁷ | ✓ |
+
+Per-seed w*: 1.4364, 1.4314 (both move from init 1.0 → ≈1.43, sharpening the
+anisotropy-compressed cosine band — a learned rescaling, not a tautology). The
+baked `.su` recompiles to logits matching the parametric model to float
+round-off, so the trained model is itself legible, recompilable Sutra source.
 
 ## §4 — Compiler pipeline
 

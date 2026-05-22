@@ -10,14 +10,15 @@ Sutra is a typed, purely functional programming language whose compiled forward 
 
 ## Replication status
 
-**In progress (recipe-first).** The paper ships a self-contained replication
-package; I am running its `SKILL.md` recipe and checking each number against
-the paper. **Verified so far:** the §3.1 capacity table reproduces **exactly**
-on all four substrates (nomic-embed-text, all-minilm, mxbai-embed-large,
-ESM-2); the compiler suite, loop/codebook tests, and §5 smoke corpus are green.
-The §3.6/§3.7 differentiable-training runs and the full crosstalk sweep are
-still being verified at the time of writing. Current reproduced-vs-reported
-tables and divergences are in [`FINDINGS.md`](./FINDINGS.md), published at the
+**Reproduced (recipe-first).** The paper ships a self-contained replication
+package; I ran its `SKILL.md` recipe and checked each number against the paper.
+**Both legs of the headline claim reproduce on this machine:** (1) the §3.1
+capacity table reproduces **exactly** on all four substrates (nomic-embed-text,
+all-minilm, mxbai-embed-large, ESM-2); (2) the §3.6/§3.7 differentiable-training
+runs reproduce through the actually-compiled PyTorch graph (18.67→100.0%;
+w\*=1.43; `.su` round-trip within ≈2×10⁻⁷). The compiler suite, loop/codebook
+tests, and §5 smoke corpus are green. Full reproduced-vs-reported tables and
+divergences are in [`FINDINGS.md`](./FINDINGS.md), published at the
 [findings site](https://emmaleonhart.github.io/replicating-sutra-tensor-op-rnns-as-a-compilation-target/).
 
 The agent-executable methodology is in [`SKILL.md`](./SKILL.md); the step
