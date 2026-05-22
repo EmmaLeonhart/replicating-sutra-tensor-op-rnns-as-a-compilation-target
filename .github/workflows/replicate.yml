@@ -1,0 +1,36 @@
+# Runs the CI-safe subset of the reproduction (scripts/run.py --offline):
+# the synthetic rotation-algebra capacity check, which is numpy-only and
+# needs no Ollama daemon, no GPU, and no model downloads.
+#
+# The headline experiments (capacity on real LLM/ESM-2 substrates,
+# crosstalk, and the §3.6/§3.7 differentiable-training runs) embed real
+# vocabularies through a LOCAL Ollama daemon with three pulled models, so
+# they are not CI-runnable and are reproduced locally — see FINDINGS.md.
+
+name: replicate
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numpy
+        run: pip install numpy
+      - name: Run offline reproduction subset
+        run: python scripts/run.py --offline
+      - name: Show metrics
+        if: always()
+        run: cat results/metrics.json || echo "no metrics written"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-metrics
+          path: results/metrics.json
