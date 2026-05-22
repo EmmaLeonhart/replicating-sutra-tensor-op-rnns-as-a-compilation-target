@@ -75,21 +75,19 @@ claim, on text and on a protein LM with no natural-language exposure.
 ## §3.1.1 — Chained bind/unbind crosstalk
 
 Reproduced with `experiments/crosstalk_chain.py`. 20 trials, bundle width 4,
-chain lengths {1,2,4,8,16,32}. Decode = raw (no per-cycle cleanup).
+chain lengths {1,2,4,8,16,32}. Raw decode accuracy (no per-cycle cleanup):
 
-nomic-embed-text (768), raw accuracy:
+| substrate | chain=1 | chain=2 | chain=4 | chain=8 |
+|-----------|---------|---------|---------|---------|
+| nomic-embed-text   | 100.0% | 100.0% | 20.0% | 0.0% |
+| all-minilm         | 100.0% | 100.0% | 5.0%  | 0.0% |
+| mxbai-embed-large  | 100.0% | 100.0% | 5.0%  | 0.0% |
 
-| chain length | reported | reproduced | match |
-|--------------|----------|------------|-------|
-| 1 | 100% | 100.0% | ✓ |
-| 2 | 100% | 100.0% | ✓ |
-| 4 | (decaying) | 20.0% | ✓ |
-| 8 | chance (1/84 ≈ 1.2%) | 0.0% | ✓ |
-
-Matches the paper's claim: raw accuracy holds at 100% through L=2 and falls to
-chance by L=8 — scoping the §3.1 capacity result to single-cycle records. (A
-clean full-sweep run across all three substrates was launched to confirm the
-same pattern holds on every substrate; nomic is shown here.)
+Reported claim: raw accuracy holds at 100% **through L=2 on every substrate**
+and falls to **chance (1/84 ≈ 1.2%) by L=8**. Reproduced on all three
+substrates (chain=8 → 0.0% everywhere; the `SKILL.md` assertion chain=1 == 1.0
+and chain=8 ≤ 0.05 holds for each). This scopes the §3.1 capacity result to
+single-cycle records, exactly as the paper states.
 
 ## §3.4 — First-class loops as soft-halt RNN cells
 
