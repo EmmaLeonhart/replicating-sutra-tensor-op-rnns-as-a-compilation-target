@@ -12,11 +12,12 @@ reproduced value satisfies the paper's stated success condition.
 
 Modes
 -----
-``--offline``   Only checks that need no Ollama daemon (compiler pytest
-                suite + the synthetic rotation-algebra capacity reference).
-                This is the CI-runnable subset.
-``(default)``   Everything, including the Ollama-substrate capacity sweeps,
-                crosstalk, and the §3.6/§3.7 differentiable-training runs.
+``--offline``   The genuinely offline subset: the synthetic rotation-algebra
+                capacity reference (numpy-only, no Ollama, no torch). This is
+                the CI-runnable subset.
+``(default)``   Everything: the full compiler pytest suite plus the
+                Ollama-substrate capacity sweeps, crosstalk, and the §3.6/§3.7
+                differentiable-training runs (all need torch and/or Ollama).
 
 Why the split: the capacity/crosstalk/training experiments embed real
 vocabularies through a **local Ollama** daemon with three pulled models —
@@ -262,10 +263,15 @@ def check_diff37():
     }
 
 
-OFFLINE = [check_pytest, check_loops, check_codebook, check_capacity_synth]
-ONLINE = [check_smoke, check_capacity_llm, check_capacity_bio,
-          check_crosstalk, check_diff36, check_diff37]
-ALL = OFFLINE + ONLINE
+# Only the synthetic rotation-algebra capacity check is genuinely offline
+# (numpy-only). The compiler pytest suite and every other experiment either
+# need torch or embed real vocab through a local Ollama daemon at runtime,
+# so they are local-only (not CI-runnable). See FINDINGS.md.
+OFFLINE = [check_capacity_synth]
+LOCAL = [check_pytest, check_loops, check_codebook, check_smoke,
+         check_capacity_llm, check_capacity_bio, check_crosstalk,
+         check_diff36, check_diff37]
+ALL = OFFLINE + LOCAL
 
 
 def main() -> int:
@@ -285,7 +291,6 @@ def main() -> int:
     if args.only:
         checks = [name_to_fn[n] for n in args.only if n in name_to_fn]
 
-    online_ids = {fn.__name__.replace("check_", "") for fn in ONLINE}
     have_ollama = _ollama_up()
 
     rows, skipped = [], []
