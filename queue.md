@@ -12,87 +12,34 @@ The canonical methodology is `SKILL.md`; this queue is its executable form.
 
 ---
 
-## Active — Replicate "Sutra: Tensor-Op RNNs as a Compilation Target for Vector Symbolic Architectures" (arXiv:2605.20919)
+## Active — Replicate "Sutra" (arXiv:2605.20919)
 
-The scaffold already made commit 1 (the framework). The efficient path is:
-get the LaTeX source, **find and run the authors' reproduction recipe FIRST**,
-then verify its output against the paper and fill only the gaps. From-scratch
-reimplementation is the fallback, not the default. Work top to bottom; delete
-each item in the same commit that completes it (and append to `devlog.md`).
+Recipe-first path is in flight: source acquired, recipe found + run, public
+repo live, Pages deployed, §3.1 capacity reproduced exactly. Remaining items
+below; delete each in the same commit that completes it (and append to
+`devlog.md`).
 
-1. **Get the LaTeX source and commit it.** Run `python download_paper.py`. It
-   downloads the arXiv **e-print source** (https://arxiv.org/src/2605.20919v1) — far cheaper to read than
-   the rendered HTML, which embeds figures as huge base64 blobs — extracts it to
-   `replication_target/source/`, and saves the PDF as a fallback record. The
-   archive and PDF are gitignored; the extracted `source/` is committed. Read
-   the paper straight from the `.tex` in `source/` — no HTML→markdown step. If
-   the paper is PDF-only (no source), fall back to the PDF. Commit the extracted
-   source.
+1. **Finish the §3.6/§3.7 differentiable-training runs and verify.** §3.6
+   (`differentiable_training_compiled.py --k 5 ... --batched`) → confirm
+   `grads_through_emitted_graph=True` and before≈18.7% → after 100.0%. §3.7
+   (`differentiable_training_weighted.py --k 3 ...`) → confirm
+   `round_trip_ok(all)=True` and w*≈1.43. Record reproduced numbers.
 
-2. **Create the GitHub repo and push — now, not at the end.** Create a PUBLIC
-   repo and push: `gh repo create --public --source=. --push` (public is
-   required for free GitHub Pages). From here on every commit pushes, so CI and
-   Pages build as you go. (This is the step the v1.4.0 flow missed — the
-   replication ran entirely locally and never went live.)
+2. **Re-run crosstalk cleanly for all three substrates.**
+   `experiments/crosstalk_chain.py` (the first run was killed to free CPU for
+   §3.6 before its JSON was written). Confirm chain=1 100% / chain=8 chance on
+   each substrate; capture the JSON.
 
-3. **FIRST, before any deep analysis: find the reproduction recipe in the
-   source.** This is the highest-leverage step and it comes before reading the
-   whole paper. Authors very often ship a recipe right in the e-print source —
-   usually near the end of the paper: a `SKILL.md` / `AGENTS.md`, a
-   `reproduce.*` / `replicate.*` / `run.sh` script, a `Makefile` reproduce
-   target, a Dockerfile, or a **replication zip** referenced in the text.
-   `download_paper.py` prints candidate files; also grep the `.tex` in `source/`
-   for "reproduc", "replicat", "skill", "github.com", and asset/zip URLs.
-   - Found a **skill/recipe file** → copy it to the repo root as
-     `replication_skill.md` and commit.
-   - Found a **replication zip** (in the source or linked in the paper) →
-     download/extract it into `replication/` (add the zip to `.gitignore`,
-     commit the extracted contents).
-   - Found the **authors' code repo** → add it as a git submodule under
-     `replication_target/` and record the decision in `notes/sources.md`.
-   - Found nothing → note that in `notes/sources.md`; the rest of the queue is
-     your from-scratch path.
+3. **Fill the §3.6/§3.7 + crosstalk rows in `FINDINGS.md`** and push — the push
+   redeploys the Pages site with the completed report (it currently serves the
+   README because FINDINGS.md isn't pushed yet).
 
-4. **If a recipe exists, RUN IT FIRST and let it drive the rest.** Set up just
-   enough environment to execute it, run it, and capture its output into
-   `results/`. Then read the paper and assess **how much of the headline claims
-   the recipe's output actually reproduces** — which numbers/figures it covers
-   and which it doesn't. Record this in `notes/sources.md`. With a working
-   recipe, most of what follows is *verifying its output against the paper*, not
-   reimplementing from scratch. Commit.
-
-5. **Check ALL references — always, recipe or not.** Walk the bibliography and
-   confirm the key cited results / datasets / baselines the paper leans on
-   actually say what the paper claims. This runs in every replication. Record
-   anything load-bearing or surprising in `notes/claims.md`. Commit.
-
-6. **Record `notes/claims.md`** — scoped to whatever the recipe did NOT already
-   cover: headline claim(s); datasets (version/hash, where they live);
-   models/methods in re-implementable detail; evaluation metrics and the exact
-   reported numbers; compute envelope (GPU type, hours, memory — decides if CI
-   can auto-run it). If the recipe covered everything, this is a short
-   confirmation. Commit.
-
-7. **Reimplement only the uncovered claims** under `src/` (skip anything the
-   recipe already reproduced; scope to the headline claim, not every ablation).
-   Pin the environment in `requirements.txt` / `environment.yml` to versions
-   that work. Commit as you go.
-
-8. **Run the full replication** via `scripts/run.py` (the CI entry point);
-   capture metrics as JSON into `results/`. Commit.
-
-9. **Write `FINDINGS.md`:** reproduced vs. reported numbers (table); what the
-   recipe covered vs. what you filled; gaps (hyperparameters, preprocessing,
-   omitted architecture details) and where/why it diverged. Commit and push.
-
-10. **Publish and finish.** Confirm `.github/workflows/pages.yml` (site + PDF
-    report) and `.github/workflows/package.yml` (ZIP) run green; set
-    Settings → Pages → Source: GitHub Actions. Keep `SKILL.md` (and
-    `replication_skill.md`, if you found one) truthful to what you actually did.
-    **Stop / hand back** when `FINDINGS.md` reports at least one headline number
-    with its reproduced value, `scripts/run.py` runs end-to-end from a clean
-    clone (or documents the un-automatable data step), the repo is public and
-    pushed, and the Pages deployment is green.
+4. **Final tidy + confirm deliverables.** Confirm `package.yml` builds the ZIP
+   (workflow_dispatch), `pages.yml` is green serving FINDINGS, `replicate.yml`
+   stays green. Keep `SKILL.md` truthful. **Stop / hand back** when FINDINGS
+   reports the headline numbers with reproduced values, `scripts/run.py` runs
+   (documenting the local-only Ollama step), the repo is public + pushed, and
+   Pages is green.
 
 ---
 

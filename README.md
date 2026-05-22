@@ -10,11 +10,22 @@ Sutra is a typed, purely functional programming language whose compiled forward 
 
 ## Replication status
 
-Not started. The agent-executable plan is in [`SKILL.md`](./SKILL.md);
-the concrete step queue is in [`queue.md`](./queue.md). The efficient path is
-**recipe-first**: get the LaTeX source, find and run the authors' reproduction
-recipe (often shipped right in the paper), then verify it against the paper and
-fill only the gaps.
+**In progress (recipe-first).** The paper ships a self-contained replication
+package; I am running its `SKILL.md` recipe and checking each number against
+the paper. **Verified so far:** the §3.1 capacity table reproduces **exactly**
+on all four substrates (nomic-embed-text, all-minilm, mxbai-embed-large,
+ESM-2); the compiler suite, loop/codebook tests, and §5 smoke corpus are green.
+The §3.6/§3.7 differentiable-training runs and the full crosstalk sweep are
+still being verified at the time of writing. Current reproduced-vs-reported
+tables and divergences are in [`FINDINGS.md`](./FINDINGS.md), published at the
+[findings site](https://emmaleonhart.github.io/replicating-sutra-tensor-op-rnns-as-a-compilation-target/).
+
+The agent-executable methodology is in [`SKILL.md`](./SKILL.md); the step
+queue is in [`queue.md`](./queue.md); chronological milestones are in
+[`devlog.md`](./devlog.md). Run the reproduction locally with
+`python scripts/run.py` (needs torch + a local Ollama daemon with the three
+embedding models); `python scripts/run.py --offline` runs the numpy-only
+CI-safe subset.
 
 ## What this repo produces
 
