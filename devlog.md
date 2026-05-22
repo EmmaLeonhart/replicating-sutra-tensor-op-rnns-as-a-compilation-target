@@ -71,3 +71,22 @@ PyTorch graph, exact to the paper's reported precision:
 
 The paper's central thesis — one `.su` artifact is both a logic program and a
 trainable neural network — holds. FINDINGS.md updated and published.
+
+## 2026-05-22 — Replication complete + deliverables green
+
+Crosstalk re-run finished cleanly on all three substrates (chain=1 100% →
+chain=8 0% on each; matches the paper on every substrate). FINDINGS.md crosstalk
+table finalized.
+
+Final state — definition of done met:
+- **FINDINGS.md** reports every headline number with its reproduced value.
+  §3.1 capacity (16 cells) and §3.6/§3.7 training reproduced *exactly*;
+  crosstalk, loops, codebook, compiler suite, smoke all reproduce. One
+  divergence recorded (`fuzzy_dispatch` 2/4; geometry-sensitive) plus a positive
+  one (test suite grew 237→363, all green).
+- **`scripts/run.py`** is the local driver (documents the local-only Ollama
+  dependency); `--offline` is the CI-safe subset.
+- **Public repo** pushed; **Pages** green and serving FINDINGS at
+  emmaleonhart.github.io/replicating-sutra-tensor-op-rnns-as-a-compilation-target;
+  **`replicate.yml`** (offline check), **`pages.yml`**, **`package.yml`** (ZIP)
+  all green.

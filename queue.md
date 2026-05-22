@@ -12,34 +12,18 @@ The canonical methodology is `SKILL.md`; this queue is its executable form.
 
 ---
 
-## Active — Replicate "Sutra" (arXiv:2605.20919)
+## Done — "Sutra" (arXiv:2605.20919) replication complete
 
-Recipe-first path is in flight: source acquired, recipe found + run, public
-repo live, Pages deployed, §3.1 capacity reproduced exactly. Remaining items
-below; delete each in the same commit that completes it (and append to
-`devlog.md`).
+The recipe-first replication is finished and handed back. All headline claims
+reproduced (most exactly); deliverables live and green. See `FINDINGS.md` for
+the reproduced-vs-reported tables and `devlog.md` for the milestone trail.
 
-1. **Finish the §3.6/§3.7 differentiable-training runs and verify.** §3.6
-   (`differentiable_training_compiled.py --k 5 ... --batched`) → confirm
-   `grads_through_emitted_graph=True` and before≈18.7% → after 100.0%. §3.7
-   (`differentiable_training_weighted.py --k 3 ...`) → confirm
-   `round_trip_ok(all)=True` and w*≈1.43. Record reproduced numbers.
-
-2. **Re-run crosstalk cleanly for all three substrates.**
-   `experiments/crosstalk_chain.py` (the first run was killed to free CPU for
-   §3.6 before its JSON was written). Confirm chain=1 100% / chain=8 chance on
-   each substrate; capture the JSON.
-
-3. **Fill the §3.6/§3.7 + crosstalk rows in `FINDINGS.md`** and push — the push
-   redeploys the Pages site with the completed report (it currently serves the
-   README because FINDINGS.md isn't pushed yet).
-
-4. **Final tidy + confirm deliverables.** Confirm `package.yml` builds the ZIP
-   (workflow_dispatch), `pages.yml` is green serving FINDINGS, `replicate.yml`
-   stays green. Keep `SKILL.md` truthful. **Stop / hand back** when FINDINGS
-   reports the headline numbers with reproduced values, `scripts/run.py` runs
-   (documenting the local-only Ollama step), the repo is public + pushed, and
-   Pages is green.
+Nothing queued. Possible future polish (not blocking, only if asked):
+- Have `scripts/run.py` support a `--reuse` mode that assembles
+  `results/metrics.json` from existing `*_results.json` without re-running the
+  ~15 min capacity/crosstalk sweeps.
+- Optionally pin a `requirements.txt` (torch, numpy, transformers, torchhd) for
+  a fully scripted local setup.
 
 ---
 
