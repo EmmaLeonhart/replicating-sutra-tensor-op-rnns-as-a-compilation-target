@@ -1,0 +1,44 @@
+
+class Math extends vector {
+    static method scalar twice(scalar x) {
+        return x * 2;
+    }
+
+    static method scalar squared(scalar x) {
+        return x * x;
+    }
+}
+
+class VSA extends vector {
+    // Intrinsic methods have no Sutra body — the runtime class
+    // implements them. Calls of the form `VSA.zero_vector()` route
+    // directly to `_VSA.zero_vector()` in the emitted Python.
+    static intrinsic method vector zero_vector();
+}
+
+function scalar main_value() {
+    scalar a = Math.twice(3);     // 6
+    scalar b = Math.squared(4);   // 16
+    return a + b;                 // 22
+}
+
+function vector zero() {
+    return VSA.zero_vector();     // dispatched to _VSA.zero_vector()
+}
+
+// Step 6: object loops — loop functions declared inside a class body.
+// The codegen emits `_loop_Counter_addOne` and the call site
+// `loop Counter.addOne(...)` dispatches to it. Marked `static`
+// because the body doesn't reference `this`; non-static class loops
+// (without the `static` keyword) thread `this` as an implicit state.
+class Counter extends vector {
+    static do_while addOne(x < 5, int x) {
+        pass x + 1;
+    }
+}
+
+function int count_to_five() {
+    slot int x = 0;
+    loop Counter.addOne(x < 5, x);
+    return x;
+}

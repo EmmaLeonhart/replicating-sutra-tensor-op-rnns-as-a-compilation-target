@@ -1,0 +1,26 @@
+
+function int PlainChar() {
+    return 'a';
+}
+
+function int EscapedNewline() {
+    return '\n';
+}
+
+function int EscapedQuote() {
+    return '\'';
+}
+
+function int EscapedBackslash() {
+    return '\\';
+}
+
+function int Zero() {
+    return '0';
+}
+
+function int CharArithmetic() {
+    // Adding 1 to 'A' should still land on the number axis.
+    var base : int = 'A';
+    return base + 1;
+}

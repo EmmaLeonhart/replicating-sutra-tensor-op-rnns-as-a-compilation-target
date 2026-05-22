@@ -1,0 +1,27 @@
+// Axon demo — round-trip through an axon.
+//
+// Axons (see planning/sutra-spec/axons.md) are bundles of named
+// variables. The surface API resembles a dict but axons are not
+// hash maps: keys are compile-time identifiers and the runtime
+// has no input → output lookup operation.
+
+vector v_cat = basis_vector("cat");
+vector v_dog = basis_vector("dog");
+vector v_mouse = basis_vector("mouse");
+
+map<vector, string> ANIMAL_NAME = {
+    v_cat:   "cat",
+    v_dog:   "dog",
+    v_mouse: "mouse"
+};
+
+function string main() {
+    Axon a;
+    a.add("subject",     v_cat);
+    a.add("object",      v_mouse);
+    a.add("instrument",  v_dog);
+
+    vector recovered = a.item("subject");
+    vector winner = argmax_cosine(recovered, [v_cat, v_dog, v_mouse]);
+    return ANIMAL_NAME[winner];
+}

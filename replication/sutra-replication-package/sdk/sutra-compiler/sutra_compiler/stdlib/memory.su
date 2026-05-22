@@ -1,0 +1,52 @@
+// Canonical Sutra definitions for memory / lookup operations.
+//
+// The runtime hashmap is a single accumulator vector built by adding
+// rotation-bound (key, value) pairs together. This file provides the
+// named functions; the surface syntax `dict<K, V>` (subscript assign /
+// read) lowers to the same operations.
+//
+// The dict at runtime is ONLY the accumulator vector. There is no
+// stored codebook of values; cleanup happens at the call site against
+// the caller's statically-known codebook. The codebook is compile-time
+// / IO state, not a runtime field of the dict.
+
+
+// ==========================================================================
+// Section 1 — implemented in pure Sutra
+// ==========================================================================
+
+
+// hashmap_new — empty accumulator (zero vector). Neutral element for
+// `+` over rotation-bound pairs.
+function vector hashmap_new() {
+    return zero_vector();
+}
+
+
+// hashmap_set — store `value` at `key` by adding `bind(key, value)` to
+// the accumulator. Functional: returns a new accumulator.
+//
+// No normalization on the bundle. Per-write normalization would corrupt
+// the magnitudes the cleanup step downstream depends on; the caller
+// normalizes at retrieval time if it wants.
+function vector hashmap_set(vector acc, vector key, vector value) {
+    return acc + bind(key, value);
+}
+
+
+// hashmap_get — recover the value at `key`. Returns the raw recovered
+// vector — clean signal plus ~1/sqrt(N) noise from the other entries.
+// Caller is responsible for cleanup (argmax_cosine against the
+// statically-known codebook, MLP attractor, iterative cleanup, etc.).
+//
+// Capacity at d=868: ~32 keys recover cleanly, 90% accuracy at k=48
+// against a 200-filler codebook. See
+// planning/findings/2026-04-23-rotation-hashmap-capacity-extended-state.md.
+function vector hashmap_get(vector acc, vector key) {
+    return unbind(key, acc);
+}
+
+
+class Memory extends vector {
+    static intrinsic method vector zero_vector();
+}

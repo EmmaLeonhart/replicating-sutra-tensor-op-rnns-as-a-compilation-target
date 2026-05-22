@@ -1,0 +1,200 @@
+// Sutra tutorial — a walk through every primitive class, annotated
+// with what the current compiler actually does to each one.
+//
+// ────────────────────────────────────────────────────────────────
+// How the compiler handles this program
+// ────────────────────────────────────────────────────────────────
+//
+// The design target is a radically unified runtime: every value is
+// a vector in the extended-state layout, every operation is a
+// tensor op, the whole program fuses into one chain of kernel
+// launches. That is what Sutra aims at.
+//
+// The *current* compiler is partway there. Complex numbers, chars,
+// the truth family (bool / fuzzy / trit), and explicit vectors all
+// become tensors. Plain `int` and `float` in `int`- and `float`-
+// typed slots stay as Python scalars today — a fast path that
+// avoids boxing 5 into an 868-dim vector just to compute 5 + 3.
+// Numbers only become vectors when the slot or the expression
+// forces it (e.g. `complex c = 5;` auto-promotes to a vector).
+//
+// Each section below shows the source and says what the compiler
+// emits for it. Where the emission is still the "plain Python
+// scalar" fast path rather than the eventual vector form, the
+// comment calls that out.
+
+
+// ═════════════════════════════════════════════════════════════
+// 1. Plain ints and floats — scalar fast path
+// ═════════════════════════════════════════════════════════════
+
+// Emits `total = (2 + 3)`. Python evaluates that at runtime to 5.
+// No vector involved; integers stay as Python ints in int slots.
+int total = 2 + 3;
+
+// Same story for float. Emits `pi_approx = 3.14159`.
+float pi_approx = 3.14159;
+
+
+// ═════════════════════════════════════════════════════════════
+// 2. Complex — actually on the real/imag axes
+// ═════════════════════════════════════════════════════════════
+
+// `5 + 5i` folds at simplify time into ComplexLiteral(5, 5);
+// codegen emits `c = _VSA.make_complex(5.0, 5.0)` — one vector
+// allocation, no runtime addition.
+complex c = 5 + 5i;
+
+// Complex multiplication uses three cached matrices + one element-
+// wise tensor multiply. No scalar extraction; pure tensor ops.
+complex product = c * (3 + 2i);
+
+// Complex addition is just vector addition — on the (real, imag)
+// axes, vector add = componentwise complex add.
+complex sum_c = c + product;
+
+// Complex multiplied by the imaginary unit rotates by 90°.
+// Emits `_VSA.complex_mul(sum_c, _VSA.make_complex(0.0, 1.0))`.
+complex rotated = sum_c * 1i;
+
+
+// ═════════════════════════════════════════════════════════════
+// 3. Char literals — int plus a flag bit
+// ═════════════════════════════════════════════════════════════
+
+// Char lives on the same real axis as int, plus a flag at
+// synthetic[AXIS_CHAR_FLAG]. Emits
+// `letter = _VSA.make_char(97)` — a vector.
+char letter = 'a';
+
+
+// ═════════════════════════════════════════════════════════════
+// 4. Truth-axis primitives — bool, fuzzy, trit
+// ═════════════════════════════════════════════════════════════
+
+// Three views of synthetic[AXIS_TRUTH]. All three become truth-
+// axis vectors at codegen time — no Python bool path.
+
+bool ready = true;            // make_truth(+1.0)
+fuzzy confidence = 0.7;       // make_truth(+0.7) — literal folded
+trit verdict = unknown;       // make_trit(0.0)
+
+
+// ═════════════════════════════════════════════════════════════
+// 5. Logical operations — polynomial on the truth axis
+// ═════════════════════════════════════════════════════════════
+//
+// `&&`, `||`, `!` are Lagrange-interpolated polynomials on the
+// three-valued grid. Exact on {-1, 0, +1}², smooth elsewhere,
+// fully differentiable. No branches.
+
+fuzzy both_conditions = confidence && ready;
+fuzzy either_condition = confidence || ready;
+fuzzy flipped = !confidence;
+
+
+// ═════════════════════════════════════════════════════════════
+// 6. Ordered comparison — tanh on real-axis difference
+// ═════════════════════════════════════════════════════════════
+//
+// `>`, `<`, `>=`, `<=` project both sides onto the real axis,
+// subtract, and pass through `tanh(100 · diff)`. Differentiable,
+// saturates at ±1 for any appreciable difference, `tanh(0) = 0`
+// for ties.
+
+fuzzy has_enough = total > 3;
+
+
+// ═════════════════════════════════════════════════════════════
+// 7. Equality — cosine similarity
+// ═════════════════════════════════════════════════════════════
+//
+// `==` and `!=` on vectors compute cosine similarity and place
+// the resulting scalar on the truth axis. Bare string literals in
+// a vector-typed slot auto-embed via the frozen LLM at module
+// init (batched into one prefetch).
+
+vector cat = "cat";
+vector kitty = "cat";     // will embed to the same vector as `cat`
+vector dog = "dog";
+
+fuzzy identical = cat == kitty;     // ≈ +1
+fuzzy near = cat == dog;            // lower — semantically distinct
+
+
+// ═════════════════════════════════════════════════════════════
+// 8. Defuzzify — truth-axis projection + iterated equality
+// ═════════════════════════════════════════════════════════════
+//
+// Project any value onto the truth axis (matmul by a fixed
+// projector) and iterate `x = x == true` 10 times. Sharpens
+// fuzzy toward {true, false, unknown}.
+
+bool confidence_sharp = defuzzy(confidence);
+
+
+// ═════════════════════════════════════════════════════════════
+// 9. Vector-keyed map — rotation binding + identity lookup
+// ═════════════════════════════════════════════════════════════
+//
+// Not a hash table. At source level a `map<vector, V>` is a set
+// of (key, value) pairs; at lookup time the compiler checks for
+// key identity first, then falls back to cosine-nearest match
+// against the stored keys.
+
+map<vector, string> LABEL = {
+    cat: "feline",
+    dog: "canine"
+};
+
+
+// ═════════════════════════════════════════════════════════════
+// 10. The IO boundary
+// ═════════════════════════════════════════════════════════════
+//
+// `main` is where the computation produces its one real Python
+// string. Everything up to the map lookup is vectors or scalars.
+// LABEL[winner] is the single place the string exits the
+// vector-math world.
+
+function string main() {
+    // Thread the declared variables through the computation so
+    // nothing is left unused.
+
+    // Number-axis: arithmetic stays on Python scalars because
+    // `total` and `pi_approx` are int/float-typed.
+    int n_check = total + 1;            // uses `total`
+    float f_check = pi_approx + 0.01;   // uses `pi_approx`
+
+    // Complex arithmetic: `sum_c` and `rotated` are vectors,
+    // operations go through complex_mul and vector add.
+    complex grand = rotated + sum_c;    // uses `sum_c`, `rotated`
+    complex doubled = grand * 2;        // scalar auto-promotes via make_real inside complex_mul
+
+    // letter stays a char (vector). Arithmetic on it would use
+    // complex_mul's scalar-coercion path if combined with a complex;
+    // here we just pass it along as-is through the data flow.
+    char first = letter;                // uses `letter`
+
+    // Truth-axis combinations: all polynomial tensor ops.
+    fuzzy truth_mix =
+        (both_conditions && either_condition) ||
+        flipped ||
+        has_enough ||
+        identical ||
+        near;
+    bool sharp = defuzzy(truth_mix) && confidence_sharp;    // uses both
+    bool verdict_bool = defuzzy(verdict);                   // uses `verdict`
+
+    // Silence the n_check / f_check / first / doubled / sharp /
+    // verdict_bool "unused" possibilities by combining into a
+    // single expression whose value we don't actually need in
+    // the output — the usage alone is enough to keep them in the
+    // compiled program.
+    fuzzy combined = sharp || verdict_bool;
+
+    // Pick the closest stored key to `cat` and read its label.
+    // This is the one place a Python string surfaces.
+    vector winner = argmax_cosine(cat, [cat, dog]);
+    return LABEL[winner];
+}

@@ -1,0 +1,66 @@
+
+// MatrixMul — matrix-vector multiply for the 2-D-times-1-D case.
+// In a real program M would come from a learned matrix or a
+// rotation primitive; here we just want to demonstrate the call.
+function vector matvec(vector M, vector x) {
+    return Tensor.MatrixMul(M, x);
+}
+
+// TensorProduct — Kronecker product. Two 1-D vectors produce a
+// 1-D result of length n*m holding every pairwise product.
+function vector kron_demo(vector a, vector b) {
+    return Tensor.TensorProduct(a, b);
+}
+
+// Outer — vector outer product. Two 1-D vectors of lengths n, m
+// produce a 2-D matrix of shape (n, m).
+function vector outer_demo(vector a, vector b) {
+    return Tensor.Outer(a, b);
+}
+
+// Dot — inner product, scalar result. Same as `Tensor.dot(a, b)`.
+function scalar dot_demo(vector a, vector b) {
+    return Tensor.Dot(a, b);
+}
+
+// Transpose — row/column swap. Identity on 1-D input.
+function vector transpose_demo(vector m) {
+    return Tensor.Transpose(m);
+}
+
+// ----- Transparency: VSA primitives in terms of leaf operations -----
+//
+// `bind(role, filler)` is convenience naming for the matrix-vector
+// multiply against the role's cached Haar-random orthogonal
+// rotation. The two functions below produce the SAME vector when
+// called with the same inputs:
+
+function vector bind_high_level(vector role, vector filler) {
+    return bind(role, filler);
+}
+
+function vector bind_low_level(vector role, vector filler) {
+    return Tensor.MatrixMul(Tensor.RotationFor(role), filler);
+}
+
+// Same for `unbind` — it's matmul against the transpose of the
+// rotation:
+function vector unbind_high_level(vector role, vector record) {
+    return unbind(role, record);
+}
+
+function vector unbind_low_level(vector role, vector record) {
+    return Tensor.MatrixMul(
+        Tensor.Transpose(Tensor.RotationFor(role)),
+        record
+    );
+}
+
+// Similarity is dot product over norms:
+function scalar similarity_high_level(vector a, vector b) {
+    return similarity(a, b);
+}
+
+function scalar similarity_low_level(vector a, vector b) {
+    return Tensor.Dot(a, b) / (Tensor.Norm(a) * Tensor.Norm(b));
+}

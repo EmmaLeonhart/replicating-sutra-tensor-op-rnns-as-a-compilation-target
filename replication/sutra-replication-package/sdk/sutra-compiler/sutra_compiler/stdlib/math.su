@@ -1,0 +1,117 @@
+// =============================================================================
+// Math — the transcendental family. Each method is a substitution onto two
+// substrate leaves; the runtime body IS that substitution, on the substrate.
+// =============================================================================
+//
+// Two leaves, both tensor ops on the substrate (codegen_pytorch.py, verified
+// substrate-pure 2026-05-15 — single _st() host→substrate boundary, _lerp
+// crosstalk readout, 0-d tensor return, no host float/if/raise):
+//
+//   realExp(a)       e^a       — the rotational crosstalk lookup codebook
+//   imaginaryExp(b)  e^(i·b)   — the eigenrotation (cos b + i·sin b)
+//
+// "Lookup" is not host array indexing: the input picks an angle, the readout
+// is a crosstalk-weighted sum over the codebook (triangular soft-index) —
+// _VSA._lerp. The eigenrotation is the unit rotation by an angle; its
+// real/imag coordinates ARE cos/sin, so there is no separate sine algorithm.
+//
+// Euler's identity is the keystone:  e^(a+b·i) = e^a · e^(b·i).  _VSA.exp
+// runs through the complex exponential cexp(x,0) so the reduction executes
+// on the substrate, not just in a comment.
+//
+// Status (2026-05-15): the documented vision now actually
+// executes on the substrate. The canonical complex `number` is the
+// d-dim synthetic-axis form (real on AXIS_REAL, imag on AXIS_IMAG) —
+// the SAME representation complex literals + complex_mul use. The
+// earlier length-2 [re,im] `cexp` deviation has been removed. The
+// runtime computes `exp(z) = realExp(z) (x) imaginaryExp(z)` where
+// (x) = complex_mul (verified substrate-pure), `cos = real(cexp(i*z))`,
+// `sin = imag(cexp(i*z))`, axis read/write via one-hot dot / scaled-
+// one-hot add (matmul-class, no host scalar). Verified vs ground
+// truth: 12 real-arg cases + complex cases (cexp(i*pi)=-1,
+// cexp(1+i*pi/2)=i*e, cexp(0.5+i)=0.89+1.39i), test_transcendentals
+// 3 passed/20 subtests, corpus + smoke PASS.
+//
+// Namespaced-stdlib inlining is wired: pow / sqrt / tan / sinh / cosh /
+// tanh / cexp all have literate bodies in this file, and the inliner
+// expands `Math.<f>(x)` to those bodies (verified end-to-end:
+// Math.pow(2,3) ≈ 8.0 via the literate `exp(y*log(x))`). The leaves —
+// realExp / imaginaryExp / exp / log / cos / sin / ccos — stay intrinsic
+// because each is a single substrate primitive (the rotational
+// crosstalk lookup or the eigenrotation), not a substitution. Not
+// faked: deferred complex `log` angle (atan2 imag part) is real-axis-
+// only for now, stated in the runtime docstring.
+
+class Math extends vector {
+
+    // realExp — e^(Re z): the rotational crosstalk lookup leaf, as a
+    //   canonical complex [e^a, 0]. One of the two substrate leaves.
+    static intrinsic method complex realExp(complex z);
+
+    // imaginaryExp — e^(i·Im z): the eigenrotation [cos, sin]. The
+    //   other leaf; cos/sin are its real/imag projections.
+    static intrinsic method complex imaginaryExp(complex z);
+
+    // cexp — the documented keystone, AS the literate beta-reduction:
+    //   e^(a+b·i) = e^a · e^(b·i) = realExp(z) · imaginaryExp(z).
+    //   The `·` is complex multiplication (both operands are complex,
+    //   so `*` dispatches to complex_mul). This body IS the executable
+    //   reduction — the inliner expands Math.cexp(z) to exactly this.
+    static method complex cexp(complex z) { return realExp(z) * imaginaryExp(z); }
+
+    // exp — Euler at a scalar boundary: real(cexp(x)). For real x this
+    //   is e^x; the documented real(exp(iθ)) projection. Out-of-range
+    //   saturates at the table edge (no host raise).
+    static intrinsic method number exp(number x);
+
+    // log / ln — natural log (JS Math.log is natural, not base-10): the
+    //   inverse codebook, same crosstalk kernel. ln is the identity alias.
+    //   Non-positive / out-of-range saturates at the table edge (a large
+    //   negative — the valid limit, not an error).
+    static intrinsic method number log(number x);
+    static intrinsic method number ln(number x);
+
+    // cos — real part of the unit eigenrotation e^(i·x).
+    // sin — imag part of the SAME rotation (the y-coordinate).
+    static intrinsic method number cos(number x);
+    static intrinsic method number sin(number x);
+
+    // ccos — complex-argument cosine. The documented reduction:
+    //   cos(z) = (e^(i·z) + e^(−i·z)) / 2.
+    //   For real z = a this collapses to [cos a, 0] — identical to the
+    //   scalar cos(x) eigenrotation path, so the paper-cited real cos
+    //   is unaffected. For z = a + b·i it yields the correct
+    //   cos a·cosh b − i·sin a·sinh b, the geometric imaginary output
+    //   of cosine the substrate was missing. Substrate-pure: built only
+    //   from the verified-pure cexp keystone + complex_mul/complex_add;
+    //   no new leaf, no host branch. Intrinsic + documented (not a
+    //   literate body) because the literate *source spelling* of the
+    //   complex transcendentals is still pending — see the file header
+    //   note; this matches the realExp/imaginaryExp precedent and is
+    //   not a math shortcut. Declared `complex` so `_is_complex_expr`
+    //   routes its result through complex_mul/complex_add, same
+    //   dispatch path as cexp.
+    static intrinsic method complex ccos(complex z);
+
+    // The remaining transcendentals are literate bodies — the
+    // documented identity IS the executable source (inliner expands
+    // Math.<f>(x) to exactly this over the intrinsic scalar leaves;
+    // `*` / `/` here are real-scalar element-wise, correct, since
+    // exp/log/sin/cos are scalar-typed so `*` is not complex_mul).
+
+    // pow — change of base:  x^y = e^(y · ln x).
+    static method number pow(number x, number y) { return exp(y * log(x)); }
+
+    // sqrt — the y = 1/2 case:  √x = e^(0.5 · ln x).
+    static method number sqrt(number x) { return exp(0.5 * log(x)); }
+
+    // tan — the rotation's slope sin/cos. cos → 0 ⇒ ±inf (valid limit).
+    static method number tan(number x) { return sin(x) / cos(x); }
+
+    // sinh = (e^x − e^−x)/2   cosh = (e^x + e^−x)/2
+    // tanh = (e^2x − 1)/(e^2x + 1)  [stable]; large |x| ⇒ exp saturates
+    //   so tanh → ±1, the correct limit.
+    static method number sinh(number x) { return (exp(x) - exp(0 - x)) * 0.5; }
+    static method number cosh(number x) { return (exp(x) + exp(0 - x)) * 0.5; }
+    static method number tanh(number x) { return (exp(2 * x) - 1) / (exp(2 * x) + 1); }
+}

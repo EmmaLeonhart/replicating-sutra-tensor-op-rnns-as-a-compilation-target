@@ -1,0 +1,202 @@
+// Canonical Sutra definitions for truth-axis and logic operations.
+//
+// Today these are hardcoded as runtime methods in codegen.py —
+// see the `def defuzzify(...)`, `def logical_and(...)`, `def eq(...)`,
+// `def gt(...)` etc. sections of _emit_prelude. This file is where
+// they want to live: as Sutra source the compiler parses, inlines
+// into user programs, and unrolls/fuses at compile time. See
+// stdlib/README.md for the broader plan.
+//
+// Two sections below:
+//   1. IMPLEMENTED IN SUTRA — bodies the parser accepts today.
+//   2. BLOCKED ON INTRINSICS — bodies that reach into primitives
+//      (dot, sqrt, tanh, axis projectors, cached polynomial
+//      matrices) that aren't language-level yet. These stay as
+//      commented-out pseudo-Sutra until an `intrinsic` mechanism
+//      or primitive-op surface lands.
+
+
+// ==========================================================================
+// Section 1 — implemented in pure Sutra
+// ==========================================================================
+
+
+// defuzzy — polarize any value along the truth axis.
+//
+// Iterates cosine equality with `true` ten times. Under the
+// eps-guarded cosine form of `==`, inputs with truth=0 stay at 0
+// (unknown stays unknown — the neutral point is a fixed point of
+// equality-with-true) and inputs with truth!=0 sharpen toward ±1.
+//
+// Ten iterations is the spec-level definition. One pass mathematically
+// suffices for well-separated inputs; the loop is kept because the
+// fully-unrolled form is what the compiler targets for fusion.
+//
+// Historical note: the original formulation was just `v = v == true`
+// (one pass, no loop). That had a pathology where `unknown` (truth=0)
+// got pulled toward false because the zero-norm case in cosine
+// similarity was handled with a branch. The eps-guarded divide in
+// the current `==` fixes the fixed-point at 0 without branching, which
+// is why the loop is safe to unroll.
+function fuzzy defuzzy(fuzzy v) {
+    loop (10) {
+        v = v == true;
+    }
+    return v;
+}
+
+
+// logical_not — Kleene K₃ negation on the truth axis.
+//
+// Polynomial form: NOT(v) = -v. Exact on {-1, 0, +1}, preserves the
+// neutral point (NOT(unknown) = unknown), differentiable everywhere.
+// Sign-flip is the entirety of the operation.
+function fuzzy logical_not(fuzzy v) {
+    return 0 - v;
+}
+
+
+// logical_and — Kleene K₃ AND. Lagrange polynomial, exact on
+// {-1, 0, +1}², smooth everywhere:
+//
+//   a ∧ b = (a + b + ab - a² - b² + a²b²) / 2
+//
+// No absolute value → no compile-time kink → no branch. Every
+// subexpression stays a tensor op. This is the form the fusion pass
+// wants to see once user-written `a && b` inlines to this body.
+function fuzzy logical_and(fuzzy a, fuzzy b) {
+    return (a + b + a * b - a * a - b * b + a * a * b * b) * 0.5;
+}
+
+
+// logical_or — Kleene K₃ OR. Dual polynomial to AND:
+//
+//   a ∨ b = (a + b - ab + a² + b² - a²b²) / 2
+function fuzzy logical_or(fuzzy a, fuzzy b) {
+    return (a + b - a * b + a * a + b * b - a * a * b * b) * 0.5;
+}
+
+
+// logical_nand — NOT(AND). Composition over the existing primitives;
+// the inliner expands the !(...) wrapper and then the AND polynomial,
+// so the final emitted form is one polynomial subtracted from a
+// constant — no new substrate primitive is introduced.
+function fuzzy logical_nand(fuzzy a, fuzzy b) {
+    return !logical_and(a, b);
+}
+
+
+// logical_xor — Kleene K₃ XOR. Closed-form polynomial: -a·b.
+//
+// Verification on the K₃ grid {-1, 0, +1}²:
+//   (1,  1)   -> -1   (T XOR T = F)
+//   (1, -1)   -> +1   (T XOR F = T)
+//   (-1, 1)   -> +1   (F XOR T = T)
+//   (-1,-1)   -> -1   (F XOR F = F)
+//   (0,  1)   ->  0   (U XOR T = U — unknown is a fixed point)
+//   (1,  0)   ->  0   (T XOR U = U)
+//
+// Equivalent to the longer composition `(a && !b) || (!a && b)`,
+// which observation: reduces to `-a·b` after polynomial folding —
+// see docs/compilation.md § "Worked examples". Shipping the closed
+// form directly so the simplifier doesn't have to discover it.
+function fuzzy logical_xor(fuzzy a, fuzzy b) {
+    return 0 - a * b;
+}
+
+
+// logical_xnor — Kleene K₃ XNOR / IFF. NOT(XOR), which simplifies to
+// the bare product:
+//
+//   (1,  1)   -> +1   (T <-> T = T)
+//   (1, -1)   -> -1   (T <-> F = F)
+//   (-1,-1)   -> +1   (F <-> F = T)
+//   (0,  1)   ->  0   (unknown bilateral)
+//
+// Same shape as logical_xor with the sign flipped. `iff` is the
+// natural-language alias the lexer also accepts.
+function fuzzy logical_xnor(fuzzy a, fuzzy b) {
+    return a * b;
+}
+
+
+// neq lives in similarity.su — it's a composition over vector cosine
+// similarity, not a truth-axis primitive. Cross-referenced there.
+
+
+// lt — strictly less than. `>` with sides swapped.
+function fuzzy lt(complex a, complex b) {
+    return b > a;
+}
+
+
+// ge / le — on the differentiable-tanh scheme, `>=` and `<=` collapse
+// to `>` and `<`: both give tanh(0) = 0 on exact ties. Programs that
+// need to distinguish strict from tie compose with `==` (cosine
+// similarity, crisp on identical operands).
+function fuzzy ge(complex a, complex b) {
+    return a > b;
+}
+
+function fuzzy le(complex a, complex b) {
+    return a < b;
+}
+
+
+// ==========================================================================
+// Section 2 — blocked on intrinsics
+// ==========================================================================
+//
+// defuzzify_trit — three-way polarizer (true / false / unknown) with
+// a β-sharpening knob instead of the straight cosine-eq loop.
+//
+//   function trit defuzzify_trit(trit v, int iters, scalar beta) {
+//       vector t = truth_projector @ v;
+//       loop (iters) {
+//           t = sign_polarize(t, beta);
+//       }
+//       return t;
+//   }
+//
+// Blocked on: `truth_projector` as a matrix literal, `sign_polarize`
+// β primitive.
+
+
+// gt — differentiable smooth sign on real-axis difference.
+//
+//   function fuzzy gt(complex a, complex b) {
+//       vector diff   = a - b;
+//       vector diff_r = real_projector @ diff;
+//       vector signed = tanh(100.0 * diff_r);
+//       return truth_from_real @ signed;
+//   }
+//
+// Blocked on: axis-projector matrix literals, `tanh` on vectors,
+// `@` matmul as a Sutra operator.
+//
+// See also:
+//   similarity.su — `eq`, `neq`, cosine operations on vectors.
+//   numbers.su    — `complex_mul`, `make_real`, `make_complex`, `make_char`.
+//   vectors.su    — `bind`, `unbind`, `bundle`, permutation ops.
+//   memory.su     — `zero_vector`, hashmap ops.
+//   rotation.su   — rotation-matrix construction and eigenrotation loop.
+//   embed.su      — the `embed` LLM-call intrinsic.
+
+
+// ==========================================================================
+// Section 3 — intrinsic declarations
+// ==========================================================================
+//
+// `gt` and `make_truth` are runtime primitives. `gt` uses tanh on
+// the real-axis difference (not expressible in pure Sutra until
+// tanh has a language-level surface); `make_truth` writes a scalar
+// into the truth-axis slot (not expressible until axis-indexed
+// write lands).
+
+intrinsic function fuzzy gt(complex a, complex b);
+intrinsic function fuzzy make_truth(number t);
+// truth_axis — read AXIS_TRUTH from a fuzzy vector and return it as
+// a scalar. The transpiler-emitted if/else lowering uses this to
+// pull a scalar out of `defuzzy(cond)` for use as a softmax score
+// in `select`.
+intrinsic function number truth_axis(vector v);
